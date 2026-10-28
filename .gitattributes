@@ -1,0 +1,12 @@
+# 统一换行符，避免 Windows/Linux 克隆产生差异
+* text=auto
+
+*.mp3 binary
+*.png binary
+*.zip binary
+
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
