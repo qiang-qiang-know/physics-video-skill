@@ -5,6 +5,16 @@
  * 场景专用的几何/物理常量不要放这里，放各自的场景文件里。
  */
 
+/**
+ * ★ 版本方向（开工前由用户选择，默认竖版）
+ * - "vertical"   竖版 1080×1920（抖音 / 视频号 / 快手）——默认
+ * - "horizontal" 横版 1920×1080（B站 / 公众号 / 课堂投屏）
+ * Root.tsx 只注册所选方向的 Composition；写错方向无法渲染，会直接报 composition not found。
+ * 只做一版即可，不要两版都做（渲染时间减半，且两版画面语言完全不同）。
+ */
+export type Orientation = "vertical" | "horizontal";
+export const ORIENTATION: Orientation = "vertical";
+
 export const QUESTION = {
   /** 顶部标签与副题 */
   tag: "高中物理 · 例题",

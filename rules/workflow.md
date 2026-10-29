@@ -1,6 +1,25 @@
 # 工作流程：从一道题到一条成片
 
-七步流程。每步有明确产出物，前一步没确认不要进下一步。
+八步流程。每步有明确产出物，前一步没确认不要进下一步。
+
+## 第 0 步：确认版本方向（开工第一件事，不可跳过）
+
+动手前先问用户一句，不要替他决定：
+
+> 这次做**竖版**（抖音/视频号，1080×1920）还是**横版**（B站/公众号，1920×1080）？默认竖版。
+
+判定规则：
+- 用户明确说横版 / B站 / 投屏 → `src/question.ts` 里 `ORIENTATION = "horizontal"`
+- 用户没指定、说"随便"、或只笼统说"做个讲解视频" → 按**竖版**（`"vertical"`，模板默认值），并在回复里说明"默认按竖版做"
+- **只做一版**。竖版是竖屏原生重排、横版是宽屏布局，两者画面语言不同，不要顺手两版都做（渲染时间翻倍且两版质量互相拖累）
+
+这一步的选择决定后面所有工作范围：
+| 选择 | 场景组件（第 6 步） | 渲染 Composition（第 7 步） | 封面 |
+|---|---|---|---|
+| 竖版（默认） | `SCENES_DY` + `KEY_POINTS`（未写的段由 DyGeneric 兜底） | `PhysicsExplainDouyin` | `CoverV` |
+| 横版 | `SCENES` 映射 | `PhysicsExplain` | `CoverH` |
+
+生成项目时可直接带参数锁定方向：`new_project.py <目录> --orientation vertical|horizontal`（默认 vertical）。
 
 ## 第 1 步：解题与物理校验（rules/physics-check.md）
 
@@ -14,7 +33,7 @@
 - 确定章节结构。选择题推荐七段：`q(题目) → model(建模) → a/b/c/d(逐项) → sum(总结)`
 - 计算题推荐五段：`q(题目) → model(建模与思路) → s1/s2/...(分步求解) → sum(总结)`
 - 每段想清楚：核心画面是什么（受力图？运动动画？v-t 图？数据面板？）
-- 用户有平台要求时先确认：横版（B站）/竖版（抖音）/两者都要——模板两版都会生成
+- 按第 0 步选定的方向设计画面比例：竖版按 1080×1920 竖屏构图（见 rules/visual.md 安全区），横版按 1920×1080 宽屏构图
 
 ## 第 3 步：写旁白文案 scripts/script.json
 
@@ -48,11 +67,14 @@ python scripts/gen_audio.py
 - 自动产出 `public/audio/l001.mp3...` 和 `src/timeline.json`
 - 产出后**必须**用 node 打印各段帧区间，确认总时长合理（>6 分钟考虑精简文案）
 
-## 第 6 步：写题目配置与场景组件
+## 第 6 步：写题目配置与场景组件（只写选定方向）
 
-1. 填 `src/question.ts`（题干、选项、答案、章节名、封面文案）
+1. 填 `src/question.ts`（题干、选项、答案、章节名、封面文案；`ORIENTATION` 在第 0 步已定，不要改）
 2. 改 `src/scenes/index.tsx` 的段 id → 组件映射
-3. 写各段场景。可用组件见 rules/visual.md；选项段没有定制画面时可用 `GenericOption`
+3. 按方向写场景（**只写一版**）：
+   - **竖版**：优先写 `SCENES_DY`（专用竖屏组件，1080×1920 原生重排）；纯讲解段可留空，由 `DyGeneric` 大字要点卡兜底；`KEY_POINTS` 每段都要有（顶部「本节关键」条）
+   - **横版**：写 `SCENES` 映射；`SCENES_DY` / `KEY_POINTS` 不用管
+   - 可选组件见 rules/visual.md；选项段没有定制画面时可用 `GenericOption`（配 `EXTRA.explain`）
 4. `npx tsc --noEmit` 过类型检查
 
 ## 第 7 步：渲染与质检
@@ -66,19 +88,26 @@ python scripts/gen_audio.py
 2. 发现问题只改 scenes，重出静帧；静帧全过后渲染 **draft 草稿版**供内容审看（`--scale=0.5` 输出 960×540，耗时约为全量的 1/4）：
 3. 草稿审看通过（讲解内容、画面节奏、音画同步无误）后才全量渲染；草稿阶段发现的问题只改 scenes/文案重出草稿，**不要直接返工 1080p**：
 
+**只跑第 0 步选定方向的那一组命令**——另一组 Composition 在 Root.tsx 里就没注册，误跑会直接报 composition not found（这是刻意设计的方向闸门）：
+
 ```bash
+# ======== 竖版（默认）========
+# 草稿（内容审看用，不交付）
+npx remotion render src/index.ts PhysicsExplainDouyin out/draft_dy.mp4 --scale=0.5 --log=error
+# 全量成品
+npx remotion render src/index.ts PhysicsExplainDouyin out/video_dy.mp4 --timeout=60000 --log=error
+npx remotion still src/index.ts CoverV out/cover_v.png
+
+# ======== 横版 ========
 # 草稿（内容审看用，不交付）
 npx remotion render src/index.ts PhysicsExplain out/draft.mp4 --scale=0.5 --log=error
-npx remotion render src/index.ts PhysicsExplainDouyin out/draft_dy.mp4 --scale=0.5 --log=error
-
-# 全量成品（横竖两条必须串行！并行渲染会双双僵死，实测两小时零产出）
+# 全量成品
 npx remotion render src/index.ts PhysicsExplain out/video.mp4 --timeout=60000 --log=error
-npx remotion render src/index.ts PhysicsExplainDouyin out/video_dy.mp4 --timeout=60000 --log=error
 npx remotion still src/index.ts CoverH out/cover_h.png
-npx remotion still src/index.ts CoverV out/cover_v.png
 ```
 
 > 并发已由模板 `remotion.config.ts` 内置（concurrency=10 + x264 veryfast），命令行不必再传 `--concurrency`。若机器同时跑其他重负载任务，可在命令行用 `--concurrency=6` 压低。
+> 只做一版时不必串行排队；若用户临时要求两版都要，两条渲染必须串行执行（并行会双双僵死，实测两小时零产出）。
 
 4. 全量渲染期间盯日志：用 `>` 落盘 + 定期看文件大小变化，卡住超过 3 分钟无新帧就停掉重跑
 5. 用 ffprobe 验证产物（时长、分辨率），并抽 1~2 帧成图确认
@@ -87,7 +116,7 @@ npx remotion still src/index.ts CoverV out/cover_v.png
 
 ## 交付
 
-- 横竖版视频 + 两版封面 +（可选）标题/话题/置顶评论建议
-- **交付前必须对竖版单独抽 2~3 帧看清晰度**：正文折算字号 < 30px 视为不合格，回去重排
-- 告知用户：改文案 → 改 script.json 重跑 gen_audio；改动画 → 改 scenes/仿真重渲染
-- 明确告诉用户哪个文件发抖音（`video_dy.mp4` + `cover_v.png`），别只丢一堆文件让人猜
+- **只交付选定方向的产物**：竖版 = `video_dy.mp4` + `cover_v.png`；横版 = `video.mp4` + `cover_h.png`；外加（可选）标题/话题/置顶评论建议
+- **竖版交付前必须抽 2~3 帧看清晰度**：正文折算字号 < 30px 视为不合格，回去重排；横版抽 1~2 帧确认无溢出/重叠
+- 告知用户：改文案 → 改 script.json 重跑 gen_audio；改动画 → 改 scenes/仿真重渲染；**改方向 → 改 `question.ts` 的 `ORIENTATION`，并补写对应方向的场景组件**
+- 别只丢一堆文件让人猜：明确说"发抖音用 `video_dy.mp4` + `cover_v.png`"，或"发 B 站用 `video.mp4` + `cover_h.png`"

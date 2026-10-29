@@ -3,12 +3,13 @@
 模板在技能包内为「拍平存储」（目录层级编码进文件名：src__components__ui.tsx），
 因为开放平台要求技能包最多两级目录。本脚本负责还原完整目录树。
 """
-import argparse, json, os, shutil, subprocess, sys
+import argparse, json, os, re, shutil, subprocess, sys
 
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE = os.path.join(SKILL, "template")
 SEP = "__"  # 目录分隔符编码（原文件名不含此串）
-CACHE = os.path.join(SKILL, ".node_modules_cache")  # 共享依赖缓存（首次 npm install 后生成）
+# 共享依赖缓存：必须放在名为 node_modules 的目录里，否则 Node 从包内向上解析同级依赖会失败
+CACHE = os.path.join(SKILL, ".deps", "node_modules")
 
 
 def decode_flat(dest):
@@ -25,6 +26,20 @@ def decode_flat(dest):
 
 def cache_ready():
     return os.path.isdir(os.path.join(CACHE, "remotion"))
+
+
+def set_orientation(dest, orientation):
+    """把选定方向写进 src/question.ts 的 ORIENTATION（默认 vertical）"""
+    p = os.path.join(dest, "src", "question.ts")
+    if not os.path.exists(p):
+        return False
+    s = open(p, encoding="utf-8").read()
+    new = re.sub(r'(export const ORIENTATION: Orientation = )"(vertical|horizontal)";',
+                 r'\1"%s";' % orientation, s)
+    if new == s:
+        return False
+    open(p, "w", encoding="utf-8", newline="\n").write(new)
+    return True
 
 
 def link_shared_node_modules(dest):
@@ -64,6 +79,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dest")
     ap.add_argument("--name", default=None)
+    ap.add_argument("--orientation", choices=["vertical", "horizontal"], default="vertical",
+                    help="版本方向：vertical 竖版（默认）/ horizontal 横版")
     ap.add_argument("--install", action="store_true",
                     help="生成后自动安装依赖（有共享缓存时走 junction，秒级完成）")
     args = ap.parse_args()
@@ -80,25 +97,33 @@ def main():
     if os.path.exists(ex):
         shutil.copy(ex, os.path.join(dest, "scripts", "script.json"))
 
+    vertical = args.orientation == "vertical"
+    if not set_orientation(dest, args.orientation):
+        print("警告：未能写入 ORIENTATION，请手动改 src/question.ts", file=sys.stderr)
+
     if args.name:
         pkg = os.path.join(dest, "package.json")
         p = json.load(open(pkg, encoding="utf-8"))
         p["name"] = args.name
         json.dump(p, open(pkg, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
+    comp = "PhysicsExplainDouyin" if vertical else "PhysicsExplain"
     print("已生成项目：", dest)
+    print(f"版本方向：{'竖版 1080×1920（抖音/视频号）' if vertical else '横版 1920×1080（B站/公众号）'}"
+          f" —— Root.tsx 只会注册 {comp}")
     print("提示：模板自带斜面滑块示例的配音/时间轴，可直接渲染验证环境：")
-    print("  npx remotion still src/index.ts PhysicsExplainDouyin out/dy.png --frame=300")
+    print(f"  npx remotion still src/index.ts {comp} out/check.png --frame=300")
     print("正式做新题时按下面顺序：")
     print("  1. 解题并产出 scripts/verification.json（答案校验单：每选项判定+证据，")
     print("     不过关禁止进入分镜）——规则见 rules/physics-check.md")
-    print("  2. 改 src/question.ts（题目配置）与 scripts/script.json（旁白）")
+    print("  2. 改 src/question.ts（题目配置，ORIENTATION 不要动）与 scripts/script.json（旁白）")
     print("  3. 复制 scripts/sim_template.py 为 scripts/sim.py，按题改造并把每个选项")
     print("     的判定写成 assert，跑出 src/data/motion.json")
     print("  4. python scripts/check_script.py（正确性关卡：校验单+旁白数字对账，必须通过）")
     print("  5. python scripts/gen_audio.py 重新生成配音与时间轴（覆盖示例）")
-    print("  6. 按需改 src/scenes/，然后 npx tsc --noEmit 检查")
-    print("  7. 先渲染 960x540 草稿审看，确认后再 1080p 全量渲染")
+    print(f"  6. 写{'竖版 SCENES_DY（未写的段由 DyGeneric 兜底）' if vertical else '横版 SCENES'}，"
+          f"再 npx tsc --noEmit 检查")
+    print(f"  7. 先渲染 960x540 草稿审看，确认后再 1080p 全量渲染（只渲 {comp}）")
 
     if args.install:
         if cache_ready():
