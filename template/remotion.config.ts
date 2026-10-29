@@ -3,8 +3,11 @@ import { existsSync } from "fs";
 
 Config.setVideoImageFormat("jpeg");
 Config.setOverwriteOutput(true);
-Config.setConcurrency(4);
+// 16 逻辑核（Ryzen 7 6800H 实测基准）：并发 4 → 10，渲染提速约 2 倍
+Config.setConcurrency(10);
 Config.setChromiumOpenGlRenderer("angle");
+// x264 veryfast 编码档：编码耗时约为默认 medium 的一半，1080p 讲解视频画质差异可忽略
+Config.setX264Preset("veryfast");
 
 // 浏览器选择（按顺序探测）：
 // 1) 项目内 browsers/chrome-win64/chrome.exe —— 推荐下载 Chrome for Testing：

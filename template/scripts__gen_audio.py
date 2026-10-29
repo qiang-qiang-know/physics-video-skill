@@ -68,21 +68,43 @@ async def tts(text, voice, rate, path):
 
 
 async def main():
+    # ---- 先收集全部句子（编号与顺序在收集阶段确定），再并发合成 ----
+    jobs = []  # (idx, seg_idx, text, path)
+    seg_ids = []
+    idx = 0
+    for si, seg in enumerate(cfg["segments"]):
+        if not seg.get("lines"):
+            continue
+        seg_ids.append(si)
+        for text in seg["lines"]:
+            idx += 1
+            jobs.append((idx, si, text, os.path.join(AUDIO_DIR, f"l{idx:03d}.mp3")))
+
+    sem = asyncio.Semaphore(4)  # 并发限流，防止 TTS 服务限流
+
+    async def one(job):
+        i, si, text, path = job
+        async with sem:
+            words = await tts(text, cfg["voice"], cfg["rate"], path)
+        dur = await asyncio.to_thread(probe, path)
+        return i, si, text, path, dur, words
+
+    results = await asyncio.gather(*[one(j) for j in jobs])
+    line_by_idx = {r[0]: r for r in results}
+    print(f"配音完成：{len(results)} 句（并发 4）")
+
+    # ---- 按原句序组装时间轴（与串行版完全一致） ----
     segs_out = []
     cursor = 0.0
     idx = 0
-    for seg in cfg["segments"]:
-        if not seg.get("lines"):
-            continue
+    for si in seg_ids:
+        seg = cfg["segments"][si]
         cursor += cfg["segPadHead"]
         lines_out = []
         for text in seg["lines"]:
             idx += 1
-            name = f"l{idx:03d}.mp3"
-            path = os.path.join(AUDIO_DIR, name)
-            words = await tts(text, cfg["voice"], cfg["rate"], path)
-            dur = probe(path)
-            lines_out.append({"text": text, "file": f"audio/{name}",
+            _, _, _, path, dur, words = line_by_idx[idx]
+            lines_out.append({"text": text, "file": f"audio/{os.path.basename(path)}",
                               "dur": round(dur, 3), "words": words,
                               "start": round(cursor, 3)})
             cursor += dur + cfg["gap"]

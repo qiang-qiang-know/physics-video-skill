@@ -38,6 +38,19 @@ print(f"a_up={a_up} a_dn={a_dn} t_stop={t_stop:.3f} x_max={x_max:.3f} "
       f"v_back={v_back:.3f} t_back={t_back:.3f}")
 assert abs(x_max - v0**2 / (2 * a_up)) < 1e-9
 
+# ---- ★ 选项结论断言（强制，与 scripts/verification.json 一一对应）----
+# 每个选项的判定必须翻译成一条 assert；任一断言失败 = 解题或仿真有误，
+# 修复前禁止进入分镜（scripts/check_script.py 也会拦截无校验单的项目）。
+# 写法：把"选项说了什么"改写成仿真能直接回答的布尔条件。
+# 示例（斜面滑块示例题，做题时替换为本题选项）：
+#   选项 A："上滑过程摩擦力大小不变" -> 断言见下
+assert abs(mu * g * COS_T - (a_up - g * SIN_T)) < 1e-9, \
+    "示例断言失败：上滑阶段摩擦力应为 mu*g*cosθ 恒定"
+#   选项 B："物块最终会停在出发点" -> 最高点后能否下滑取决于 mu 与 tanθ
+assert (mu < math.tan(math.atan(SIN_T / COS_T))) == (v_back > 0), \
+    "示例断言失败：能否下滑由 mu 与 tanθ 的关系决定"
+#   （按本题选项数量续写……每条断言对应 verification.json 里一个选项的 evidence）
+
 # ---- 数值积分（两阶段解析运动即可，这里演示"解析+采样"的最简形式；
 #      需要积分的题参考 skill 示例项目的 spring-block 模型）----
 samples = []

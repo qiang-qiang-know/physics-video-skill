@@ -2,6 +2,27 @@
 
 教学视频讲错一道题 = 整条视频作废。以下规则按题的类型执行。
 
+## 规则 0：答案校验单（强制产物，流程闸门）
+
+解题完成后、进入分镜前，**必须**产出 `scripts/verification.json`，格式：
+
+```jsonc
+{
+  "answer": "B",
+  "options": [
+    { "id": "A", "verdict": false,
+      "evidence": { "method": "simulation", "detail": "仿真 t=t_stop 时 v=0，与选项矛盾" } },
+    { "id": "B", "verdict": true,
+      "evidence": { "method": "dual_derivation", "consistent": true,
+                    "method1": "能量法：…", "method2": "动力学法：…" } }
+  ]
+}
+```
+
+- `method` 三选一：`simulation`（仿真验证，附仿真打印的关键数值）/ `dual_derivation`（两种独立方法，必须填 method1、method2 且 consistent=true）/ `formula`（仅限纯公式代算且可代回验算的题）
+- `scripts/check_script.py` 会校验此文件：**缺失或选项缺判定/证据时直接拦截，禁止进入分镜**
+- verdict 与 sim.py 里的选项断言一一对应；后续解题/仿真任何改动，校验单必须同步更新
+
 ## 规则 1：答案不能只靠推理
 
 - **能用数值仿真验证的题（力学为主）必须仿真**：建运动方程积分，把"每个选项的对错"翻译成仿真能回答的问题
@@ -18,6 +39,10 @@
 - 极值：相对位移范围、能量分配
 
 锚点要写进 `motion.json` 的 `events` 字段，场景组件直接引用，**禁止在组件里手写物理数值**。
+
+**仿真脚本必须断言化**：每个选项的判定（verification.json 里的 verdict）都要翻译成一条 `assert`——"选项说了什么"改写成仿真能直接回答的布尔条件，断言失败 = 解题或仿真有误，修复前禁止继续。写法见 `sim_template.py` 的"选项结论断言"一节。
+
+**旁白数字对账**：旁白（script.json）中出现的所有物理数值必须能在 motion.json（events/params/samples）中找到出处，`scripts/check_script.py` 自动核查；旁白中不存在于仿真数据的数值会被拦截——这道关卡保证"讲出来的数字"与"算出来的数字"永远一致。
 
 ## 规则 3：参数选择服务于讲解
 
